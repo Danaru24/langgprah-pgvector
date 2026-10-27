@@ -1,0 +1,71 @@
+# =============================================================================
+#  .gitignore — Blindado para Red Hat OpenShift AI Workbench
+#  Regla: tras ejecutar cualquier script, `git status` DEBE quedar limpio
+#  para no bloquear futuros `git pull` (flujo Git unidireccional).
+# =============================================================================
+
+# --- Secretos / variables de entorno -----------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Salidas del benchmark (CSV / JSON / Markdown autogenerados) -------------
+results/
+outputs/
+reports/
+
+# --- Pesos y cachés de modelos (Hugging Face / SentenceTransformers / Torch) -
+models_cache/
+.cache/
+hf_cache/
+huggingface/
+.huggingface/
+torch_cache/
+*.safetensors
+*.bin
+*.onnx
+*.gguf
+
+# --- Logs ---------------------------------------------------------------------
+logs/
+*.log
+nohup.out
+
+# --- Python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Entornos virtuales ------------------------------------------------------
+.venv/
+venv/
+env/
+.python-version
+
+# --- Jupyter / Workbench (no usamos notebooks, pero el Workbench los crea) ---
+.ipynb_checkpoints/
+*.ipynb
+.jupyter/
+.local/
+.config/
+.npm/
+.virtual_documents/
+
+# --- IDE / SO -----------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~

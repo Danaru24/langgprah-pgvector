@@ -1,0 +1,164 @@
+{
+  "version": "1.0",
+  "descripcion": "Golden Dataset del benchmark de embeddings Payworks. 15 preguntas en 3 categorías. Editar 'ground_truth' si cambian los encabezados de docs/Payworks_Master_RAG.md.",
+  "instrucciones_ground_truth": {
+    "secciones": "Fragmentos (sin importar acentos/mayúsculas) que deben aparecer en seccion_h2 o seccion_h3 del chunk recuperado.",
+    "keywords": "Fragmentos clave que deben aparecer en el cuerpo del chunk (sin la línea de contexto [h1 > h2 > h3]).",
+    "criterio": "seccion | keywords | seccion_o_keywords | seccion_y_keywords",
+    "min_keywords": "Mínimo de keywords que deben coincidir (default 1)."
+  },
+  "preguntas": [
+    {
+      "id": "Q01",
+      "categoria": "Conceptos y Glosario",
+      "pregunta": "¿Qué es el Merchant ID y para qué se utiliza en Payworks?",
+      "ground_truth": {
+        "secciones": ["Afiliación y Merchant ID"],
+        "keywords": ["MERCHANT_ID", "afiliación"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q02",
+      "categoria": "Conceptos y Glosario",
+      "pregunta": "¿Qué valores puede tomar el parámetro MODE y qué significa cada uno?",
+      "ground_truth": {
+        "secciones": ["Modos de Operación"],
+        "keywords": ["PRD", "AUT", "DEC", "RND"],
+        "criterio": "seccion_o_keywords",
+        "min_keywords": 3
+      }
+    },
+    {
+      "id": "Q03",
+      "categoria": "Conceptos y Glosario",
+      "pregunta": "¿Qué significa que una transacción regrese RESULTADO_PAYW con valor T?",
+      "ground_truth": {
+        "secciones": ["Códigos de Resultado"],
+        "keywords": ["Sin respuesta del autorizador"],
+        "criterio": "seccion_o_keywords"
+      }
+    },
+    {
+      "id": "Q04",
+      "categoria": "Conceptos y Glosario",
+      "pregunta": "¿Cuál es la diferencia entre una autorización directa y una preautorización?",
+      "ground_truth": {
+        "secciones": ["Tipos de Transacción", "Preautorización y Postautorización"],
+        "keywords": ["PREAUTH", "AUTH"],
+        "criterio": "seccion",
+        "min_keywords": 2
+      }
+    },
+    {
+      "id": "Q05",
+      "categoria": "Conceptos y Glosario",
+      "pregunta": "¿Qué es 3D Secure y qué beneficio le aporta al comercio ante contracargos?",
+      "ground_truth": {
+        "secciones": ["3D Secure"],
+        "keywords": ["liability shift", "transferencia de responsabilidad"],
+        "criterio": "seccion_o_keywords"
+      }
+    },
+    {
+      "id": "Q06",
+      "categoria": "Flujo y Arquitectura",
+      "pregunta": "¿Cuáles son los componentes principales de la arquitectura de integración con la pasarela?",
+      "ground_truth": {
+        "secciones": ["Componentes Principales"],
+        "keywords": ["Payment Service", "Conector Payworks"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q07",
+      "categoria": "Flujo y Arquitectura",
+      "pregunta": "¿Qué pasos sigue una autorización desde que el cliente confirma la compra hasta recibir la respuesta?",
+      "ground_truth": {
+        "secciones": ["Flujo de Autorización"],
+        "keywords": ["llave de idempotencia", "PENDIENTE"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q08",
+      "categoria": "Flujo y Arquitectura",
+      "pregunta": "¿Cómo se completa una preautorización para generar el cargo definitivo y qué pasa si vence?",
+      "ground_truth": {
+        "secciones": ["Preautorización y Postautorización"],
+        "keywords": ["POSTAUTH", "vigencia"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q09",
+      "categoria": "Flujo y Arquitectura",
+      "pregunta": "¿Cuándo debo usar un reverso en lugar de una cancelación?",
+      "ground_truth": {
+        "secciones": ["Reversos y Cancelaciones"],
+        "keywords": ["REVERSAL", "VOID"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q10",
+      "categoria": "Flujo y Arquitectura",
+      "pregunta": "¿Qué controles de seguridad PCI DSS se deben aplicar en la integración?",
+      "ground_truth": {
+        "secciones": ["Seguridad y Cumplimiento PCI DSS"],
+        "keywords": ["CVV2", "TLS 1.2"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q11",
+      "categoria": "Monitoreo y SRE",
+      "pregunta": "¿Cuál es el SLO de disponibilidad y de latencia del servicio de pagos?",
+      "ground_truth": {
+        "secciones": ["SLIs y SLOs"],
+        "keywords": ["99.95%", "p95"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q12",
+      "categoria": "Monitoreo y SRE",
+      "pregunta": "¿Qué métricas debe mostrar el dashboard principal de pagos?",
+      "ground_truth": {
+        "secciones": ["Métricas y Dashboards"],
+        "keywords": ["transacciones por segundo", "burn rate"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q13",
+      "categoria": "Monitoreo y SRE",
+      "pregunta": "¿Qué umbral de rechazos o timeouts dispara una alerta crítica?",
+      "ground_truth": {
+        "secciones": ["Alertamiento"],
+        "keywords": ["5% durante 5 minutos"],
+        "criterio": "seccion_o_keywords"
+      }
+    },
+    {
+      "id": "Q14",
+      "categoria": "Monitoreo y SRE",
+      "pregunta": "¿Qué debo hacer si la pasarela no responde a tiempo y la transacción queda incierta?",
+      "ground_truth": {
+        "secciones": ["Runbook: Timeouts y Reversos Automáticos"],
+        "keywords": ["REQUIERE_CONCILIACION", "retroceso exponencial"],
+        "criterio": "seccion"
+      }
+    },
+    {
+      "id": "Q15",
+      "categoria": "Monitoreo y SRE",
+      "pregunta": "¿Cómo se clasifica la severidad de un incidente y a quién se escala en un SEV1?",
+      "ground_truth": {
+        "secciones": ["Gestión de Incidentes"],
+        "keywords": ["SEV1", "postmortem"],
+        "criterio": "seccion"
+      }
+    }
+  ]
+}

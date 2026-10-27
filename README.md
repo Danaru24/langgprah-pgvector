@@ -1,0 +1,163 @@
+# Benchmark de Embeddings (CPU) y Chunking — Payworks RAG sobre OpenShift AI + pgvector
+
+Benchmark científico de **5 modelos de embeddings viables en CPU × 3 perfiles de chunking** (15 experimentos) sobre la documentación técnica financiera de **Payworks** en español. Usa **PostgreSQL + `pgvector`** como almacén vectorial y **Red Hat OpenShift AI** como entorno de ejecución.
+
+---
+
+## 1. Flujo de trabajo (Git Sync unidireccional)
+
+```mermaid
+flowchart LR
+    A["Local (Antigravity)<br/>desarrollo"] -- git push --> B["GitHub"]
+    B -- git pull --> C["OpenShift AI Workbench<br/>python src/*.py"]
+    C -- "results/, models_cache/, .env<br/>(ignorados por git)" --> C
+```
+
+1. Todo el código se desarrolla en local y se sube con `git push`.
+2. En el Workbench **solo** se ejecuta `git pull` y los scripts por CLI. Sin notebooks.
+3. Ningún artefacto generado (cachés, pesos HF, logs, `results/`, `.env`, `.venv/`) se versiona → `git status` queda limpio tras cada corrida. Además, todos los scripts desactivan la escritura de `__pycache__`.
+
+---
+
+## 2. Estructura
+
+```text
+.
+├── .gitignore                 # Blindado para el Workbench
+├── .env.example               # Plantilla de variables (PG, INFERENCE_MODE, endpoints, HF_HOME)
+├── requirements.txt           # Dependencias fijadas (torch CPU-only)
+├── docs/
+│   ├── Payworks_Master_RAG.md # Documento fuente (hoy: PLANTILLA ilustrativa → reemplazar)
+│   └── golden_dataset.json    # 15 preguntas + ground truth editable
+├── sql/init_pgvector.sql      # DDL: extensión, 3 tablas por dimensión, HNSW + B-Tree
+└── src/
+    ├── config.py              # .env, MODELOS_CONFIG, CHUNK_PERFILES, utilidades
+    ├── chunker.py             # Chunking híbrido 2 etapas + contexto jerárquico (CLI de inspección)
+    ├── embeddings_client.py   # local_cpu (SentenceTransformers) | openai_endpoint (HTTP + MRL/L2)
+    ├── db_setup.py            # Aplica el DDL y verifica
+    ├── ingest.py              # Chunk → embed → pgvector (idempotente, con tiempos)
+    └── evaluate.py            # Golden Dataset → métricas → CSV + reporte Markdown
+```
+
+---
+
+## 3. Matriz experimental
+
+| ID corto | Hugging Face ID | Dim | Tabla | Prefijo doc | Prefijo query | Ventana |
+| :--- | :--- | :---: | :--- | :--- | :--- | ---: |
+| `bge-m3` | `BAAI/bge-m3` | 1024 | `payworks_rag_1024` | — | — | 8192 |
+| `multilingual-e5-large` | `intfloat/multilingual-e5-large` | 1024 | `payworks_rag_1024` | `passage: ` | `query: ` | 512 |
+| `embeddinggemma-300m` | `google/embeddinggemma-300m` | 768 | `payworks_rag_768` | `title: {titulo} \| text: ` | `task: search result \| query: ` | 2048 |
+| `granite-278m-multilingual` | `ibm-granite/granite-embedding-278m-multilingual` | 768 | `payworks_rag_768` | — | — | 512 |
+| `all-MiniLM-L6-v2` | `sentence-transformers/all-MiniLM-L6-v2` | 384 | `payworks_rag_384` | — | — | 256 |
+
+| Perfil | chunk_size (chars) | overlap | Propósito |
+| :--- | ---: | ---: | :--- |
+| `Perfil_A_600` | 600 | 100 | Granular / Glosario |
+| `Perfil_B_1500` | 1500 | 250 | Balanceado (≈512 tokens) |
+| `Perfil_C_3000` | 3000 | 400 | Contexto amplio (expone truncamiento) |
+
+`experimento_id = {modelo}__{perfil}` (p. ej. `bge-m3__Perfil_B_1500`).
+
+**Chunking híbrido:** `MarkdownHeaderTextSplitter` (h1/h2/h3 → metadatos) → `RecursiveCharacterTextSplitter` (`["\n### ", "\n## ", "\n\n", "\n", ". ", " "]`) → se antepone `[h1 > h2 > h3]\n` a cada chunk antes de vectorizar (y luego el prefijo del modelo).
+
+---
+
+## 4. Ejecución en OpenShift AI Workbench
+
+### 4.1 Primera vez
+
+```bash
+git clone https://github.com/Danaru24/langgprah-pgvector.git && cd langgprah-pgvector
+python -m venv .venv && source .venv/bin/activate      # .venv vive en el PVC y está ignorado
+pip install -r requirements.txt
+cp .env.example .env && vi .env                          # credenciales PG, endpoint, HF_TOKEN
+python src/db_setup.py                                   # extensión + tablas + índices
+python src/chunker.py --show 2                           # (opcional) inspeccionar chunks
+```
+
+### 4.2 Ciclo por modelo (solo UN modelo levantado a la vez)
+
+En modo `openai_endpoint` cada corrida procesa **un solo modelo**: el que esté desplegado. Antes de vectorizar, el cliente consulta `/v1/models` (vLLM) o `/info` (TEI) y **aborta si el modelo servido no coincide** con `--modelo` (evita contaminar la BD). Los resultados se **acumulan** en `results/` entre corridas.
+
+```bash
+git pull
+source .venv/bin/activate
+
+# 1) Desplegar bge-m3 en OpenShift AI (vLLM/TEI) y apuntar EMBEDDING_BASE_URL(__BGE_M3) en .env
+python src/ingest.py   --modelo bge-m3        # 3 perfiles → payworks_rag_1024
+python src/evaluate.py --modelo bge-m3        # métricas + reporte parcial
+
+# 2) Bajar bge-m3, levantar el siguiente y repetir
+python src/ingest.py   --modelo multilingual-e5-large && python src/evaluate.py --modelo multilingual-e5-large
+python src/ingest.py   --modelo embeddinggemma-300m   && python src/evaluate.py --modelo embeddinggemma-300m
+python src/ingest.py   --modelo granite-278m-multilingual && python src/evaluate.py --modelo granite-278m-multilingual
+python src/ingest.py   --modelo all-MiniLM-L6-v2      && python src/evaluate.py --modelo all-MiniLM-L6-v2
+
+# 3) Reporte final consolidado (no requiere modelos)
+python src/evaluate.py --report-only
+cat results/reporte_benchmark.md
+
+git status   # debe estar limpio
+```
+
+Alternativa sin servidores (`local_cpu`, carga y libera un modelo a la vez en el CPU del pod):
+
+```bash
+python src/ingest.py   --modelo all --mode local_cpu
+python src/evaluate.py --modelo all --mode local_cpu
+```
+
+### 4.3 Opciones útiles
+
+| Script | Flag | Descripción |
+| :--- | :--- | :--- |
+| `ingest.py` / `evaluate.py` | `--modelo X` / `all` | Default: `ACTIVE_MODEL` del `.env` |
+| | `--perfil Perfil_B_1500` | Default: los 3 perfiles |
+| | `--mode local_cpu\|openai_endpoint` | Override de `INFERENCE_MODE` |
+| | `--skip-model-check` | Omite la verificación del modelo servido |
+| `ingest.py` | `--batch-size N`, `--doc ruta.md` | |
+| `evaluate.py` | `--search-mode exact\|hnsw` | `exact` (default) = KNN exacto; `hnsw` = índice ANN |
+| | `--report-only` | Regenera el reporte desde `results/` |
+| `db_setup.py` | `--check` | Solo verifica tablas, dimensiones, índices y experimentos |
+
+**Configuración de endpoints:** se puede usar una sola `EMBEDDING_BASE_URL` (y editarla al rotar) o pre-configurar las 5 con sufijo por modelo, p. ej. `EMBEDDING_BASE_URL__BGE_M3`, `EMBEDDING_SERVED_MODEL_NAME__BGE_M3`. La URL se normaliza a `.../v1`.
+
+---
+
+## 5. Métricas y salidas
+
+| Archivo (`results/`, ignorado) | Contenido |
+| :--- | :--- |
+| `ingest_metrics.csv` | Por experimento: chunks, chars/tokens promedio y máx., **% truncados**, ms/chunk, ms de inserción, sha256 del documento |
+| `eval_detalle.csv` | Por experimento × pregunta: rank del primer relevante, Hit@1/3/5, RR@3, sim Top1/Top5, ΔCos, Top-5 recuperado (✔/✘) y latencias |
+| `eval_resumen.csv` | Por experimento: Hit Rate@1/@3/@5, **MRR@3**, **ΔCos (Top1−Top5)**, ms/query embed y búsqueda |
+| `reporte_benchmark.md` | Ranking por MRR@3 → Hit@3, mejor perfil por modelo, efecto del perfil, MRR por categoría y hallazgos automáticos |
+
+**Relevancia (ground truth):** cada pregunta define `secciones` (match en `seccion_h2`/`seccion_h3`), `keywords` (match en el cuerpo) y un `criterio` (`seccion`, `keywords`, `seccion_o_keywords`, `seccion_y_keywords`). El matching ignora acentos y mayúsculas.
+
+---
+
+## 6. Decisiones de diseño (rigor experimental)
+
+- **Mismo texto en ambos modos:** los prefijos se aplican manualmente; se desactivan los *default prompts* de SentenceTransformers.
+- **Normalización L2 universal** y **truncado MRL** solo para modelos Matryoshka (EmbeddingGemma); un modelo no-MRL con dimensión inesperada aborta la corrida.
+- **Warm-up** antes de medir latencias (excluye carga del modelo / primera conexión).
+- **Truncamiento cuantificado** con el tokenizer real de cada modelo (fallback `chars/4` si no está disponible, p. ej. modelo gated sin `HF_TOKEN`).
+- **Búsqueda exacta por defecto** (`SET LOCAL enable_indexscan = off`) para que el ranking mida al modelo y no el error de HNSW. En modo `hnsw` se usa `ef_search=100` e `iterative_scan` (pgvector ≥ 0.8) para no perder resultados al filtrar por `experimento_id`.
+- **Idempotencia:** `DELETE … WHERE experimento_id = %s` + `INSERT` en la misma transacción.
+- **`chunk_size` es cota superior:** como la etapa 1 corta por sección, si las secciones son más cortas que el perfil, B y C pueden coincidir (ver "Chars prom." en el reporte).
+- **ΔCos solo es comparable dentro de un mismo modelo**: cada espacio vectorial tiene su propia escala de similitudes.
+
+---
+
+## 7. Bitácora del proyecto
+
+| Fecha | Cambio |
+| :--- | :--- |
+| 2026-10-27 | Estructura inicial: config, chunker híbrido, cliente de embeddings dual (local_cpu / openai_endpoint con verificación del modelo servido), DDL pgvector (3 tablas, HNSW coseno), ingesta idempotente con métricas, evaluación con Golden Dataset (15 preguntas) y reporte ejecutivo. `docs/Payworks_Master_RAG.md` es una **plantilla ilustrativa** pendiente de reemplazo por el documento oficial. |
+
+### Pendientes
+- [ ] Reemplazar `docs/Payworks_Master_RAG.md` por el documento oficial y ajustar `ground_truth` en `docs/golden_dataset.json`.
+- [ ] Desplegar cada modelo en OpenShift AI (vLLM/TEI CPU) y ejecutar el ciclo de la sección 4.2.
+- [ ] Revisar el reporte consolidado y seleccionar modelo + perfil ganador.

@@ -1,0 +1,21 @@
+# Índice de PyTorch CPU-only (evita descargar ~2 GB de librerías CUDA en el Workbench)
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- Núcleo -------------------------------------------------------------------
+python-dotenv==1.1.1
+numpy==2.2.6
+pandas==2.3.2
+tqdm==4.67.1
+requests==2.32.5
+
+# --- PostgreSQL / pgvector ----------------------------------------------------
+psycopg[binary]==3.2.10
+pgvector==0.4.1
+
+# --- Chunking -----------------------------------------------------------------
+langchain-text-splitters==0.3.11
+
+# --- Embeddings en CPU (modo local_cpu) + tokenizers para medir truncamiento --
+torch==2.8.0
+transformers==4.56.1
+sentence-transformers==5.1.0
