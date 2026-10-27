@@ -1,21 +1,55 @@
-# Índice de PyTorch CPU-only (evita descargar ~2 GB de librerías CUDA en el Workbench)
---extra-index-url https://download.pytorch.org/whl/cpu
+# ==============================================================================
+# Dependencias del proyecto: Payworks RAG / PostgreSQL pgvector / Embeddings CPU
+# Entorno validado: Red Hat OpenShift AI (RHOAI) 3.5, UBI 9, Python 3.12
+# ==============================================================================
+#
+# IMPORTANTE SOBRE LOS ÍNDICES Y TOPOLOGÍA DE RED EN RHOAI
+# --------------------------------------------------------
+# Este archivo NO incluye el índice de PyTorch con --extra-index-url.
+#
+# El Workbench de OpenShift AI tiene configurado como índice principal:
+# https://packages.redhat.com/api/pypi/public-rhai/rhoai/3.5/cpu-ubi9/simple/
+#
+# En el Workbench, pypi.org y files.pythonhosted.org NO tienen salida TCP/443
+# (firewall / aislamiento de red del cluster).
+# Si se agrega el índice de PyTorch como extra-index en este archivo, pip también
+# lo consulta para paquetes generales (como NumPy) y selecciona wheels cuyos
+# artefactos apuntan a files.pythonhosted.org, provocando Connection Timed Out.
+#
+# PyTorch CPU debe instalarse por separado y exclusivamente con --index-url:
+#
+#   python -m pip install -r requirements.txt
+#   python -m pip install "torch==2.11.0+cpu" \
+#       --index-url https://download.pytorch.org/whl/cpu
+#   python -m pip check
+# ==============================================================================
 
 # --- Núcleo -------------------------------------------------------------------
-python-dotenv==1.1.1
-numpy==2.2.6
-pandas==2.3.2
-tqdm==4.67.1
-requests==2.32.5
+# 1.1.1 no existe en el índice RHOAI 3.5; disponibles: 1.2.1 y 1.2.2.
+python-dotenv==1.2.2
+
+# Fija la versión validada en el Workbench para evitar que pip elija 2.5.2 desde PyTorch.
+numpy==2.5.1
+pandas==2.3.3
+tqdm==4.70.1
+requests==2.33.0
 
 # --- PostgreSQL / pgvector ----------------------------------------------------
-psycopg[binary]==3.2.10
-pgvector==0.4.1
+# Acotados a versión mayor para permitir builds RHOAI sin saltos mayores incompatibles.
+psycopg[binary]>=3.2.10,<4
+pgvector>=0.4.1,<1
 
 # --- Chunking -----------------------------------------------------------------
+# Versión disponible en RHOAI evitando saltos a 1.x.
 langchain-text-splitters==0.3.11
 
-# --- Embeddings en CPU (modo local_cpu) + tokenizers para medir truncamiento --
-torch==2.8.0
-transformers==4.56.1
-sentence-transformers==5.1.0
+# --- Embeddings en CPU --------------------------------------------------------
+# Mantiene Transformers 4.x para evitar saltos a 5.x (índice RHOAI ofrece 4.57.3 y 4.57.6).
+transformers==4.57.6
+
+# 5.1.0 no apareció en el índice RHOAI; 5.2.0 validada.
+sentence-transformers==5.2.0
+
+# NOTA: torch NO se incluye aquí intencionalmente.
+# Se instala en el paso 2 con --index-url exclusivo de PyTorch CPU:
+# pip install "torch==2.11.0+cpu" --index-url https://download.pytorch.org/whl/cpu

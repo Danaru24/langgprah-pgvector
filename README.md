@@ -65,12 +65,39 @@ flowchart LR
 
 ## 4. Ejecución en OpenShift AI Workbench
 
-### 4.1 Primera vez
+### 4.1 Primera vez (Instalación en 2 pasos para RHOAI 3.5)
+
+> [!IMPORTANT]
+> **Topología de red en el Workbench:** el índice base es el repositorio público RHOAI de Red Hat (`packages.redhat.com`), mientras que `pypi.org` y `files.pythonhosted.org` no tienen salida TCP/443. Por ello, **no** se usa `--extra-index-url` en `requirements.txt`. PyTorch CPU se instala en un segundo paso exclusivo con `--index-url` para que no contamine la resolución de NumPy ni otras dependencias.
 
 ```bash
 git clone https://github.com/Danaru24/langgprah-pgvector.git && cd langgprah-pgvector
-python -m venv .venv && source .venv/bin/activate      # .venv vive en el PVC y está ignorado
-pip install -r requirements.txt
+python -m venv .venv && source .venv/bin/activate      # .venv vive en el PVC y está en .gitignore
+
+# 1. Dependencias generales desde el índice RHOAI
+python -m pip install -r requirements.txt
+
+# 2. PyTorch CPU exclusivamente desde el índice de PyTorch
+python -m pip install "torch==2.11.0+cpu" \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# 3. Validar consistencia del entorno
+python -m pip check
+
+# 4. Validar imports y modo CPU (torch.cuda.is_available() debe ser False)
+python - <<'PY'
+import numpy, pandas, torch, transformers, sentence_transformers, langchain_text_splitters, psycopg, pgvector
+print("numpy:", numpy.__version__)
+print("pandas:", pandas.__version__)
+print("torch:", torch.__version__, "| CUDA disponible:", torch.cuda.is_available())
+print("transformers:", transformers.__version__)
+print("sentence-transformers:", sentence_transformers.__version__)
+print("langchain-text-splitters:", langchain_text_splitters.__version__)
+print("psycopg:", psycopg.__version__)
+print("pgvector:", pgvector.__version__)
+PY
+
+# 5. Configurar .env e inicializar BD
 cp .env.example .env && vi .env                          # credenciales PG, endpoint, HF_TOKEN
 python src/db_setup.py                                   # extensión + tablas + índices
 python src/chunker.py --show 2                           # (opcional) inspeccionar chunks
@@ -156,6 +183,7 @@ python src/evaluate.py --modelo all --mode local_cpu
 | Fecha | Cambio |
 | :--- | :--- |
 | 2026-10-27 | Estructura inicial: config, chunker híbrido, cliente de embeddings dual (local_cpu / openai_endpoint con verificación del modelo servido), DDL pgvector (3 tablas, HNSW coseno), ingesta idempotente con métricas, evaluación con Golden Dataset (15 preguntas) y reporte ejecutivo. `docs/Payworks_Master_RAG.md` es una **plantilla ilustrativa** pendiente de reemplazo por el documento oficial. |
+| 2026-10-27 | **Ajuste RHOAI 3.5 UBI 9 (Python 3.12):** Diagnóstico de conectividad de red y catálogo de paquetes. Se retiró `--extra-index-url` de `requirements.txt` para prevenir que pip consulte PyTorch para NumPy (evitando timeouts hacia `files.pythonhosted.org`). Se fijaron versiones validadas en el repositorio público RHOAI (`python-dotenv==1.2.2`, `numpy==2.5.1`, `pandas==2.3.3`, `transformers==4.57.6`, `sentence-transformers==5.2.0`, `psycopg>=3.2.10,<4`, `pgvector>=0.4.1,<1`). Se documentó la instalación en 2 pasos (`torch==2.11.0+cpu` vía `--index-url`). |
 
 ### Pendientes
 - [ ] Reemplazar `docs/Payworks_Master_RAG.md` por el documento oficial y ajustar `ground_truth` en `docs/golden_dataset.json`.
