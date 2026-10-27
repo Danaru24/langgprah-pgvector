@@ -35,8 +35,9 @@ tqdm==4.70.1
 requests==2.33.0
 
 # --- PostgreSQL / pgvector ----------------------------------------------------
+# psycopg SIN [binary]: evita requerir psycopg-binary que no existe en el índice RHOAI.
 # Acotados a versión mayor para permitir builds RHOAI sin saltos mayores incompatibles.
-psycopg[binary]>=3.2.10,<4
+psycopg>=3.2.10,<4
 pgvector>=0.4.1,<1
 
 # --- Chunking -----------------------------------------------------------------

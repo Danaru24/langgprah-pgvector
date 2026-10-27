@@ -230,14 +230,15 @@ def endpoint_settings(modelo: ModeloConfig) -> dict:
     """
     key = _env_key(modelo.id_corto)
     base_url = _env_str(f"EMBEDDING_BASE_URL__{key}") or _env_str("EMBEDDING_BASE_URL")
+    explicit_served_name = (
+        _env_str(f"EMBEDDING_SERVED_MODEL_NAME__{key}")
+        or _env_str("EMBEDDING_SERVED_MODEL_NAME")
+    )
     return {
         "base_url": _normalizar_base_url(base_url) if base_url else "",
         "api_key": _env_str(f"EMBEDDING_API_KEY__{key}") or _env_str("EMBEDDING_API_KEY"),
-        "served_model_name": (
-            _env_str(f"EMBEDDING_SERVED_MODEL_NAME__{key}")
-            or _env_str("EMBEDDING_SERVED_MODEL_NAME")
-            or modelo.hf_id
-        ),
+        "served_model_name": explicit_served_name or modelo.hf_id,
+        "is_served_name_explicit": bool(explicit_served_name),
     }
 
 

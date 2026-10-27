@@ -164,17 +164,34 @@ class EmbeddingsClient:
         esperado = self.served_model_name.lower()
         cola_hf = self.modelo.hf_id.split("/")[-1].lower()
         corto = self.modelo.id_corto.lower()
-        ok = any(
-            i.lower() == esperado or cola_hf in i.lower() or i.lower() in (corto, cola_hf)
-            for i in ids
-        )
-        if not ok:
+
+        matching_id = None
+        for i in ids:
+            i_low = i.lower()
+            if i_low == esperado:
+                matching_id = i
+                break
+            if cola_hf in i_low or i_low in (corto, cola_hf):
+                matching_id = i
+
+        if not matching_id:
             raise SystemExit(
                 f"El endpoint {base} sirve {ids}, pero se solicitó --modelo {self.modelo.id_corto} "
                 f"({self.served_model_name}). Solo hay un modelo levantado a la vez: despliega el modelo "
                 "correcto, ajusta EMBEDDING_SERVED_MODEL_NAME o usa --skip-model-check."
             )
-        log.info("Endpoint verificado: sirve %s", ids)
+
+        # Si el usuario no especificó un nombre explícito en .env, tomamos como referencia
+        # el nombre exacto devuelto por /v1/models (p.ej. 'redhataibge-m3') para evitar HTTP 404.
+        if not self._endpoint.get("is_served_name_explicit") and self.served_model_name != matching_id:
+            log.info(
+                "Alineando served_model_name con el nombre retornado por /v1/models: '%s' (en lugar de '%s')",
+                matching_id,
+                self.served_model_name,
+            )
+            self._endpoint["served_model_name"] = matching_id
+
+        log.info("Endpoint verificado: sirve %s (modelo activo en peticiones: %s)", ids, self.served_model_name)
         return ids
 
     def _post_embeddings(self, textos: Sequence[str]) -> np.ndarray:

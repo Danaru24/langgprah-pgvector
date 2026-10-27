@@ -86,15 +86,16 @@ python -m pip check
 
 # 4. Validar imports y modo CPU (torch.cuda.is_available() debe ser False)
 python - <<'PY'
-import numpy, pandas, torch, transformers, sentence_transformers, langchain_text_splitters, psycopg, pgvector
+from importlib.metadata import version
+import numpy, pandas, torch, transformers, sentence_transformers, psycopg, pgvector
 print("numpy:", numpy.__version__)
 print("pandas:", pandas.__version__)
 print("torch:", torch.__version__, "| CUDA disponible:", torch.cuda.is_available())
 print("transformers:", transformers.__version__)
 print("sentence-transformers:", sentence_transformers.__version__)
-print("langchain-text-splitters:", langchain_text_splitters.__version__)
+print("langchain-text-splitters:", version("langchain-text-splitters"))
 print("psycopg:", psycopg.__version__)
-print("pgvector:", pgvector.__version__)
+print("pgvector:", version("pgvector"))
 PY
 
 # 5. Configurar .env e inicializar BD
@@ -105,13 +106,17 @@ python src/chunker.py --show 2                           # (opcional) inspeccion
 
 ### 4.2 Ciclo por modelo (solo UN modelo levantado a la vez)
 
-En modo `openai_endpoint` cada corrida procesa **un solo modelo**: el que esté desplegado. Antes de vectorizar, el cliente consulta `/v1/models` (vLLM) o `/info` (TEI) y **aborta si el modelo servido no coincide** con `--modelo` (evita contaminar la BD). Los resultados se **acumulan** en `results/` entre corridas.
+En modo `openai_endpoint` cada corrida procesa **un solo modelo**: el que esté desplegado. Antes de vectorizar, el cliente consulta `/v1/models` (vLLM) o `/info` (TEI):
+- **Verificación de modelo:** aborta si el modelo servido no coincide con `--modelo` (evita contaminar la BD).
+- **Alineación de nombre servido:** si `/v1/models` devuelve un nombre específico de la plataforma (por ejemplo `redhataibge-m3` en lugar de `BAAI/bge-m3`), el cliente lo toma automáticamente como referencia en el campo `"model"` del POST `/v1/embeddings` (o se puede forzar con `EMBEDDING_SERVED_MODEL_NAME__BGE_M3=redhataibge-m3`).
+- Los resultados se **acumulan** en `results/` entre corridas.
 
 ```bash
 git pull
 source .venv/bin/activate
 
-# 1) Desplegar bge-m3 en OpenShift AI (vLLM/TEI) y apuntar EMBEDDING_BASE_URL(__BGE_M3) en .env
+# 1) Desplegar bge-m3 en OpenShift AI (vLLM/TEI)
+# En .env configurar EMBEDDING_BASE_URL (y opcionalmente EMBEDDING_SERVED_MODEL_NAME__BGE_M3=redhataibge-m3)
 python src/ingest.py   --modelo bge-m3        # 3 perfiles → payworks_rag_1024
 python src/evaluate.py --modelo bge-m3        # métricas + reporte parcial
 
@@ -184,6 +189,7 @@ python src/evaluate.py --modelo all --mode local_cpu
 | :--- | :--- |
 | 2026-10-27 | Estructura inicial: config, chunker híbrido, cliente de embeddings dual (local_cpu / openai_endpoint con verificación del modelo servido), DDL pgvector (3 tablas, HNSW coseno), ingesta idempotente con métricas, evaluación con Golden Dataset (15 preguntas) y reporte ejecutivo. `docs/Payworks_Master_RAG.md` es una **plantilla ilustrativa** pendiente de reemplazo por el documento oficial. |
 | 2026-10-27 | **Ajuste RHOAI 3.5 UBI 9 (Python 3.12):** Diagnóstico de conectividad de red y catálogo de paquetes. Se retiró `--extra-index-url` de `requirements.txt` para prevenir que pip consulte PyTorch para NumPy (evitando timeouts hacia `files.pythonhosted.org`). Se fijaron versiones validadas en el repositorio público RHOAI (`python-dotenv==1.2.2`, `numpy==2.5.1`, `pandas==2.3.3`, `transformers==4.57.6`, `sentence-transformers==5.2.0`, `psycopg>=3.2.10,<4`, `pgvector>=0.4.1,<1`). Se documentó la instalación en 2 pasos (`torch==2.11.0+cpu` vía `--index-url`). |
+| 2026-10-27 | **Ajuste psycopg y endpoint BGE-M3 (OpenShift AI):** Se cambió `psycopg[binary]` a `psycopg>=3.2.10,<4` sin extra binary para evitar el requerimiento de `psycopg-binary==3.3.4` ausente en el índice RHOAI. Se mantuvo `hf_id="BAAI/bge-m3"` desacoplado del nombre servido, y se configuró `embeddings_client.py` para alinear automáticamente el campo `"model"` con el identificador retornado por `/v1/models` (ej. `redhataibge-m3`), evitando errores HTTP 404. Se corrigió el comando de validación para usar `importlib.metadata.version` con `langchain-text-splitters`. |
 
 ### Pendientes
 - [ ] Reemplazar `docs/Payworks_Master_RAG.md` por el documento oficial y ajustar `ground_truth` en `docs/golden_dataset.json`.
